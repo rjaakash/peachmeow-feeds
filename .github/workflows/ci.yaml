@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "0 * * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Generate Feeds
+        run: python3 main.py
+
+      - name: Login to GitHub CLI
+        run: |
+          printf '%s' "${{ github.token }}" | gh auth login --with-token
+
+      - name: Create Release
+        run: |
+          gh release delete Cat --yes || true
+          git push --delete origin Cat || true
+
+          gh release create Cat \
+            --title "🐱 PeachMeow Feeds" \
+            ./*.xml
+
+      - name: Cleanup Workflow Runs
+        run: |
+          workflow_run_ids=$(gh run list --limit 200 --json databaseId -q '.[].databaseId')
+
+          run_count=0
+
+          for run_id in $workflow_run_ids; do
+            run_count=$((run_count+1))
+
+            if [ $run_count -gt 24 ]; then
+              gh run delete "$run_id"
+            fi
+          done
